@@ -1,17 +1,16 @@
-maintainer       "Heavy Water Software Inc."
-maintainer_email "ops@hw-ops.com"
+maintainer       "SecondMarket Labs, LLC"
+maintainer_email "systems@secondmarket.com"
 license          "Apache 2.0"
 description      "Installs/Configures graphite"
 long_description IO.read(File.join(File.dirname(__FILE__), 'README.md'))
-version          "0.3.1"
+version          "1.0.0"
 
-supports "ubuntu"
+%w{redhat centos fedora}.each do |os|
+	supports os
+end
 
-depends "python"
-depends "apache2"
-
-suggests "runit"
-suggests "systemd"
-suggests "s6"
+%w{python rhapache}.each do |p|
+	depends p
+end
 
 suggests "graphiti"

@@ -1,52 +1,73 @@
-package "python-twisted"
-package "python-simplejson"
+#
+# Cookbook Name:: graphite
+# Recipe:: default
+#
+# Copyright 2012, SecondMarket Labs, LLC.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations unde
 
-version = node['graphite']['version']
-pyver = node['graphite']['python_version']
+include_recipe "python"
 
-remote_file "/usr/src/carbon-#{version}.tar.gz" do
-  source node['graphite']['carbon']['uri']
-  checksum node['graphite']['carbon']['checksum']
+package "python-twisted-core" do
+  action :install
 end
 
-execute "untar carbon" do
-  command "tar xzf carbon-#{version}.tar.gz"
-  creates "/usr/src/carbon-#{version}"
-  cwd "/usr/src"
+python_pip "carbon" do
+  action :install
+  version node[:graphite][:version]
 end
 
-execute "install carbon" do
-  command "python setup.py install"
-  creates "#{node['graphite']['base_dir']}/lib/carbon-#{version}-py#{pyver}.egg-info"
-  cwd "/usr/src/carbon-#{version}"
+template "/etc/init.d/carbon-cache" do
+  owner "root"
+  group "root"
+  mode 00755
+  source "carbon-cache.init.erb"
 end
 
-template "#{node['graphite']['base_dir']}/conf/carbon.conf" do
-  owner node['apache']['user']
-  group node['apache']['group']
-  variables( :line_receiver_interface => node['graphite']['carbon']['line_receiver_interface'],
-             :pickle_receiver_interface => node['graphite']['carbon']['pickle_receiver_interface'],
-             :cache_query_interface => node['graphite']['carbon']['cache_query_interface'] )
+user node[:graphite][:carbon][:user] do
+  action :create
+end
+
+service "carbon-cache" do
+  supports [ :start, :stop, :restart ]
+  action :enable
+end
+
+template "/opt/graphite/conf/carbon.conf" do
+  owner "root"
+  group "root"
+  mode 00644
+  variables( :line_receiver_interface => node[:graphite][:carbon][:line_receiver_interface],
+             :pickle_receiver_interface => node[:graphite][:carbon][:pickle_receiver_interface],
+             :cache_query_interface => node[:graphite][:carbon][:cache_query_interface] )
   notifies :restart, "service[carbon-cache]"
 end
 
-template "#{node['graphite']['base_dir']}/conf/storage-schemas.conf" do
-  owner node['apache']['user']
-  group node['apache']['group']
+template "/opt/graphite/conf/storage-schemas.conf" do
+  owner "root"
+  group "root"
+  mode 00644
 end
 
-execute "carbon: change graphite storage permissions to apache user" do
-  command "chown -R www-data:www-data #{node['graphite']['base_dir']}/storage"
-  only_if do
-    f = File.stat("#{node['graphite']['base_dir']}/storage")
-    f.uid == 0 and f.gid == 0
+%w{/opt/graphite/storage/whisper /opt/graphite/storage/log/carbon-cache}.each do |d|
+  directory d do
+    owner node[:graphite][:carbon][:user]
+    group node[:graphite][:carbon][:group]
+    action :create
+    mode 00755
   end
 end
 
-directory "#{node['graphite']['base_dir']}/lib/twisted/plugins/" do
-  owner node['apache']['user']
-  group node['apache']['group']
+service "carbon-cache" do
+  action :start
 end
-
-service_type = node['graphite']['carbon']['service_type']
-include_recipe "#{cookbook_name}::#{recipe_name}_#{service_type}"
